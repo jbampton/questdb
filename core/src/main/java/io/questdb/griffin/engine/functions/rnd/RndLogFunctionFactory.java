@@ -71,9 +71,9 @@ public class RndLogFunctionFactory implements FunctionFactory {
                 final LogRecord log;
 
                 if (rnd.nextDouble() * 10000 < errorRatio * 100) {
-                    log = LOG.error();
+                    log = LOG.errorW();
                 } else {
-                    log = LOG.info();
+                    log = LOG.infoW();
                 }
 
                 log.$(rnd.nextString(25)).$();
