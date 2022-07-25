@@ -24,32 +24,34 @@
 
 package org.questdb;
 
-import io.questdb.cutlass.line.LineTcpSender;
-import io.questdb.network.Net;
+import io.questdb.client.Sender;
 import io.questdb.std.Rnd;
 
 public class LineTCPSenderMainDupCols {
-    public static void main(String[] args) {
-        final long count = 30_000_000;
-        String hostIPv4 = "127.0.0.1";
-        int port = 9009; // 8089 influx
-        int bufferCapacity = 8 * 1024;
 
-        final Rnd rnd = new Rnd();
-        long start = System.nanoTime();
-        try (LineTcpSender sender = LineTcpSender.newSender(Net.parseIPv4(hostIPv4), port, bufferCapacity)) {
-            for (int i = 0; i < count; i++) {
-                sender.metric("weather");
-                sender
-                        .tag("location", "london")
-                        .tag("by", "blah")
-                        .field("temp", rnd.nextPositiveLong())
-                        .field("ok", rnd.nextPositiveInt())
-                        .field("ok", rnd.nextPositiveInt());
-                sender.$();
+    public static void main(String[] args) {
+        try (Sender sender = Sender.builder()
+                .address("alex-support-toy-43467d67.ilp.b04c.questdb.net:32243")
+                .enableTls()
+                .enableAuth("admin").authToken("spgdXkZUbvg12R6MYme8ikmZPlpByL-1qXNZKvdh_zg")
+                .build()) {
+
+            final long count = 30_000_000;
+            Rnd rnd = new Rnd();
+
+            String[] tags = new String[1000];
+            for(int i = 0; i < tags.length; i++) {
+                tags[i] = "tag" + rnd.nextString(30);
             }
-            sender.flush();
+
+            for (int i = 0; i < count; i++) {
+                sender.table("inventors")
+                        .symbol("tag", tags[i % tags.length])
+                        .symbol("tag2", "tag2" + i % 10000)
+                        .longColumn("id", i)
+                        .timestampColumn("ts", System.nanoTime() / 1000)
+                        .at(System.nanoTime());
+            }
         }
-        System.out.println("Actual rate: " + (count * 1_000_000_000L / (System.nanoTime() - start)));
     }
 }
