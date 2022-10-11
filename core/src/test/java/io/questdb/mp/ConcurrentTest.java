@@ -86,13 +86,16 @@ public class ConcurrentTest {
         MPSequence pub = new MPSequence(cycle);
 
         pub.then(sub).then(pub);
-        final int total = 10_000_000;
+        final int total = 10_000;
         int subThreads = 4;
         int pubThreads = 1;
 
         CyclicBarrier latch = new CyclicBarrier(subThreads + pubThreads);
         ObjList<Thread> pubThreadList = new ObjList<>();
         AtomicInteger busyCount = new AtomicInteger();
+        AtomicLong anomalies = new AtomicLong();
+        AtomicLong dummy = new AtomicLong();
+        AtomicInteger done = new AtomicInteger();
 
         for (int th = 0; th < pubThreads; th++) {
 
@@ -102,7 +105,6 @@ public class ConcurrentTest {
                 } catch (InterruptedException | BrokenBarrierException e) {
                     throw new RuntimeException(e);
                 }
-
                 for (int i = 0; i < total; i++) {
                     long seq;
                     while (true) {
@@ -130,36 +132,57 @@ public class ConcurrentTest {
 //                            msg.f16 = i + 15;
 //                            msg.f15 = i + 14;
 //                            msg.f14 = i + 13;
-//                            msg.f13 = i + 12;
-//                            msg.f12 = i + 11;
-//                            msg.f11 = i + 10;
-                            msg.f1 = i;
-                            msg.f2 = i + 1;
-                            msg.f3 = i + 2;
-                            msg.f4 = i + 3;
-                            msg.f5 = i + 4;
-                            msg.f6 = i + 5;
-                            msg.f7 = i + 6;
-                            msg.f8 = i + 7;
-                            msg.f9 = i + 8;
-                            msg.f10 = i + 9;
+                            if (i % 2 == 0) {
+//                                msg.f13 = i + 12;
+//                                msg.f12 = i + 11;
+//                                msg.f11 = i + 10;
+                                msg.f1 = i;
+                                msg.f2 = i + 1;
+//                                msg.f3 = i + 2;
+//                                msg.f4 = i + 3;
+//                                msg.f5 = i + 4;
+//                                msg.f6 = i + 5;
+//                                msg.f7 = i + 6;
+//                                msg.f8 = i + 7;
+//                                msg.f9 = i + 8;
+                                msg.f10 = i + 9;
+                            } else {
+                                msg.f8 = i + 7;
+                                msg.f9 = i + 8;
+                                msg.f10 = i + 9;
+//                                msg.f13 = i + 12;
+//                                msg.f12 = i + 11;
+//                                msg.f11 = i + 10;
+
+                                msg.f1 = i;
+                                msg.f2 = i + 1;
+//                                msg.f3 = i + 2;
+//                                msg.f4 = i + 3;
+//                                msg.f5 = i + 4;
+//                                msg.f6 = i + 5;
+//                                msg.f7 = i + 6;
+                            }
 
                             pub.done(seq);
 
                             break;
                         } else if (seq == -1) {
                             busyCount.incrementAndGet();
+                            seq = sub.next();
+                            if (seq > -1) {
+                                processMsg(pingQueue, sub, subThreads, anomalies, dummy, seq, i);
+                                break;
+                            }
                         }
                     }
                 }
+                done.incrementAndGet();
             });
             pubTh.start();
             pubThreadList.add(pubTh);
         }
 
-        AtomicLong anomalies = new AtomicLong();
         ObjList<Thread> threads = new ObjList<>();
-        AtomicLong dummy = new AtomicLong();
 
         for (int th = 0; th < subThreads; th++) {
             Thread subTh = new Thread(() -> {
@@ -170,134 +193,12 @@ public class ConcurrentTest {
                 }
 
                 long seq;
-                for (int i = 0; i < (total * pubThreads) / subThreads; i++) {
-                    while (true) {
-
-                        seq = sub.next();
-                        if (seq > -1) {
-
-                            LongLongMsg msg = pingQueue.get(seq);
-
-                            if (
-                                    msg.f2 != msg.f1 + 1 ||
-//                                            msg.f3 != msg.f1 + 2 ||
-//                                            msg.f4 != msg.f1 + 3 ||
-//                                            msg.f5 != msg.f1 + 4 ||
-//                                            msg.f6 != msg.f1 + 5 ||
-//                                            msg.f7 != msg.f1 + 6 ||
-//                                            msg.f8 != msg.f1 + 7 ||
-//                                            msg.f9 != msg.f1 + 8 ||
-                                            msg.f10 != msg.f1 + 9 //||
-//                                            msg.f11 != msg.f1 + 10 ||
-//                                            msg.f12 != msg.f1 + 11 ||
-//                                            msg.f13 != msg.f1 + 12 ||
-//                                            msg.f14 != msg.f1 + 13 ||
-//                                            msg.f15 != msg.f1 + 14 ||
-//                                            msg.f16 != msg.f1 + 15 ||
-//                                            msg.f17 != msg.f1 + 16 ||
-//                                            msg.f18 != msg.f1 + 17 ||
-//                                            msg.f19 != msg.f1 + 18 ||
-//                                            msg.f20 != msg.f1 + 19 ||
-//                                            msg.f21 != msg.f1 + 20 ||
-//                                            msg.f22 != msg.f1 + 21 ||
-//                                            msg.f23 != msg.f1 + 22 ||
-//                                            msg.f24 != msg.f1 + 23 ||
-//                                            msg.f25 != msg.f1 + 24 ||
-//                                            msg.f26 != msg.f1 + 25 ||
-//                                            msg.f27 != msg.f1 + 26 ||
-//                                            msg.f28 != msg.f1 + 27 ||
-//                                            msg.f29 != msg.f1 + 28 ||
-//                                            msg.f30 != msg.f1 + 29 ||
-//                                            msg.f31 != msg.f1 + 30 ||
-//                                            msg.f32 != msg.f1 + 31 ||
-//                                            msg.f33 != msg.f1 + 32
-                            ) {
-                                anomalies.incrementAndGet();
-                            }
-
-                            if (i % subThreads == 0) {
-                                sub.done(seq);
-                                break;
-                            }
-
-                            long f1 = msg.f1;
-                            long f2 = msg.f2;
-//                            long f3 = msg.f3;
-//                            long f4 = msg.f4;
-//                            long f5 = msg.f5;
-//                            long f6 = msg.f6;
-//                            long f7 = msg.f7;
-//                            long f8 = msg.f8;
-//                            long f9 = msg.f9;
-                            long f10 = msg.f10;
-//                        long f11 = msg.f11;
-//                        long f12 = msg.f12;
-//                        long f13 = msg.f13;
-//                        long f14 = msg.f14;
-//                        long f15 = msg.f15;
-//                        long f16 = msg.f16;
-//                        long f17 = msg.f17;
-//                        long f18 = msg.f18;
-//                        long f19 = msg.f19;
-//                        long f20 = msg.f20;
-//                        long f21 = msg.f21;
-//                        long f22 = msg.f22;
-//                        long f23 = msg.f23;
-//                        long f24 = msg.f24;
-//                        long f25 = msg.f25;
-//                        long f26 = msg.f26;
-//                        long f27 = msg.f27;
-//                        long f28 = msg.f28;
-//                        long f29 = msg.f29;
-//                        long f30 = msg.f30;
-//                        long f31 = msg.f31;
-//                        long f32 = msg.f32;
-//                        long f33 = msg.f33;
-
-                            sub.done(seq);
-
-                            if (
-                                    f2 != f1 + 1 ||
-//                                            f3 != f1 + 2 ||
-//                                            f4 != f1 + 3 ||
-//                                            f5 != f1 + 4 ||
-//                                            f6 != f1 + 5 ||
-//                                            f7 != f1 + 6 ||
-//                                            f8 != f1 + 7 ||
-//                                            f9 != f1 + 8 ||
-                                            f10 != f1 + 9
-                                //||
-//                                f11 != f1 + 10 ||
-////                                f12 != f1 + 11 ||
-//                                f13 != f1 + 12 ||
-////                                f14 != f1 + 13 ||
-//                                f15 != f1 + 14 ||
-////                                f16 != f1 + 15 ||
-//                                f17 != f1 + 16 ||
-////                                f18 != f1 + 17 ||
-//                                f19 != f1 + 18 ||
-////                                f20 != f1 + 19 ||
-//                                f21 != f1 + 20 ||
-////                                f22 != f1 + 21 ||
-//                                f23 != f1 + 22 ||
-////                                f24 != f1 + 23 ||
-//                                f25 != f1 + 24 ||
-////                                f26 != f1 + 25 ||
-//                                f27 != f1 + 26 ||
-////                                f28 != f1 + 27 ||
-//                                f29 != f1 + 28 ||
-////                                f30 != f1 + 29 ||
-//                                f31 != f1 + 30 ||
-////                                f32 != f1 + 31 ||
-//                                f33 != f1 + 32
-                            ) {
-
-                                anomalies.incrementAndGet();
-                            }
-
-                            dummy.set((long) (Math.exp(f1) + Math.log(f2) + Math.sin(f10)));
-                            break;
-                        }
+                int i = 0;
+                while (done.get() < pubThreads) {
+                    seq = sub.next();
+                    if (seq > -1) {
+                        processMsg(pingQueue, sub, subThreads, anomalies, dummy, seq, i++);
+                        break;
                     }
                 }
             });
@@ -315,7 +216,7 @@ public class ConcurrentTest {
             subTh.join();
         }
 
-        Assume.assumeTrue(busyCount.get() > 1000);
+        Assume.assumeTrue(busyCount.get() > total / 1000);
         Assert.assertEquals("Anomalies detected", 0, anomalies.get());
         Assert.assertTrue("dummy", dummy.get() > 0);
     }
@@ -1020,6 +921,129 @@ public class ConcurrentTest {
         sequence.done(cursor);
     }
 
+    private void processMsg(RingQueue<LongLongMsg> pingQueue, MCSequence sub, int subThreads, AtomicLong anomalies, AtomicLong dummy, long seq, int i) {
+        LongLongMsg msg = pingQueue.get(seq);
+
+//        if (
+//                msg.f2 != msg.f1 + 1 ||
+////                                            msg.f3 != msg.f1 + 2 ||
+////                                            msg.f4 != msg.f1 + 3 ||
+////                                            msg.f5 != msg.f1 + 4 ||
+////                                            msg.f6 != msg.f1 + 5 ||
+////                                            msg.f7 != msg.f1 + 6 ||
+////                                            msg.f8 != msg.f1 + 7 ||
+////                                            msg.f9 != msg.f1 + 8 ||
+//                        msg.f10 != msg.f1 + 9 //||
+////                                            msg.f11 != msg.f1 + 10 ||
+////                                            msg.f12 != msg.f1 + 11 ||
+////                                            msg.f13 != msg.f1 + 12 ||
+////                                            msg.f14 != msg.f1 + 13 ||
+////                                            msg.f15 != msg.f1 + 14 ||
+////                                            msg.f16 != msg.f1 + 15 ||
+////                                            msg.f17 != msg.f1 + 16 ||
+////                                            msg.f18 != msg.f1 + 17 ||
+////                                            msg.f19 != msg.f1 + 18 ||
+////                                            msg.f20 != msg.f1 + 19 ||
+////                                            msg.f21 != msg.f1 + 20 ||
+////                                            msg.f22 != msg.f1 + 21 ||
+////                                            msg.f23 != msg.f1 + 22 ||
+////                                            msg.f24 != msg.f1 + 23 ||
+////                                            msg.f25 != msg.f1 + 24 ||
+////                                            msg.f26 != msg.f1 + 25 ||
+////                                            msg.f27 != msg.f1 + 26 ||
+////                                            msg.f28 != msg.f1 + 27 ||
+////                                            msg.f29 != msg.f1 + 28 ||
+////                                            msg.f30 != msg.f1 + 29 ||
+////                                            msg.f31 != msg.f1 + 30 ||
+////                                            msg.f32 != msg.f1 + 31 ||
+////                                            msg.f33 != msg.f1 + 32
+//        ) {
+//            anomalies.incrementAndGet();
+//        }
+
+//        if (i % subThreads == 0) {
+//            sub.done(seq);
+//            return;
+//        }
+
+        long f1 = msg.f1;
+        long f2 = msg.f2;
+        long f3 = msg.f3;
+        long f4 = msg.f4;
+        long f5 = msg.f5;
+        long f6 = msg.f6;
+        long f7 = msg.f7;
+        long f8 = msg.f8;
+        long f9 = msg.f9;
+        long f10 = msg.f10;
+//                        long f11 = msg.f11;
+//                        long f12 = msg.f12;
+//                        long f13 = msg.f13;
+//                        long f14 = msg.f14;
+//                        long f15 = msg.f15;
+//                        long f16 = msg.f16;
+//                        long f17 = msg.f17;
+//                        long f18 = msg.f18;
+//                        long f19 = msg.f19;
+//                        long f20 = msg.f20;
+//                        long f21 = msg.f21;
+//                        long f22 = msg.f22;
+//                        long f23 = msg.f23;
+//                        long f24 = msg.f24;
+//                        long f25 = msg.f25;
+//                        long f26 = msg.f26;
+//                        long f27 = msg.f27;
+//                        long f28 = msg.f28;
+//                        long f29 = msg.f29;
+//                        long f30 = msg.f30;
+//                        long f31 = msg.f31;
+//                        long f32 = msg.f32;
+//                        long f33 = msg.f33;
+
+        sub.done(seq);
+
+        if (
+                f2 != f1 + 1 ||
+//                        f3 != f1 + 2 ||
+//                        f4 != f1 + 3 ||
+//                        f5 != f1 + 4 ||
+//                        f6 != f1 + 5 ||
+//                        f7 != f1 + 6 ||
+//                        f8 != f1 + 7 ||
+//                        f9 != f1 + 8 ||
+                        f10 != f1 + 9
+            //||
+//                                f11 != f1 + 10 ||
+////                                f12 != f1 + 11 ||
+//                                f13 != f1 + 12 ||
+////                                f14 != f1 + 13 ||
+//                                f15 != f1 + 14 ||
+////                                f16 != f1 + 15 ||
+//                                f17 != f1 + 16 ||
+////                                f18 != f1 + 17 ||
+//                                f19 != f1 + 18 ||
+////                                f20 != f1 + 19 ||
+//                                f21 != f1 + 20 ||
+////                                f22 != f1 + 21 ||
+//                                f23 != f1 + 22 ||
+////                                f24 != f1 + 23 ||
+//                                f25 != f1 + 24 ||
+////                                f26 != f1 + 25 ||
+//                                f27 != f1 + 26 ||
+////                                f28 != f1 + 27 ||
+//                                f29 != f1 + 28 ||
+////                                f30 != f1 + 29 ||
+//                                f31 != f1 + 30 ||
+////                                f32 != f1 + 31 ||
+//                                f33 != f1 + 32
+        ) {
+            anomalies.incrementAndGet();
+        }
+
+        dummy.set((long) (Math.exp(f1) + Math.log(f2) + Math.sin(f10)));
+        return;
+    }
+
     private static class LongMsg {
         public long correlationId;
     }
@@ -1035,29 +1059,29 @@ public class ConcurrentTest {
         public long f8;
         public long f9;
         public long f10;
-        public long f11;
-        public long f12;
-        public long f13;
-        public long f14;
-        public long f15;
-        public long f16;
-        public long f17;
-        public long f18;
-        public long f19;
-        public long f20;
-        public long f21;
-        public long f22;
-        public long f23;
-        public long f24;
-        public long f25;
-        public long f26;
-        public long f27;
-        public long f28;
-        public long f29;
-        public long f30;
-        public long f31;
-        public long f32;
-        public long f33;
+//        public long f11;
+//        public long f12;
+//        public long f13;
+//        public long f14;
+//        public long f15;
+//        public long f16;
+//        public long f17;
+//        public long f18;
+//        public long f19;
+//        public long f20;
+//        public long f21;
+//        public long f22;
+//        public long f23;
+//        public long f24;
+//        public long f25;
+//        public long f26;
+//        public long f27;
+//        public long f28;
+//        public long f29;
+//        public long f30;
+//        public long f31;
+//        public long f32;
+//        public long f33;
     }
 
     private static class BusyProducerConsumer extends Thread {
