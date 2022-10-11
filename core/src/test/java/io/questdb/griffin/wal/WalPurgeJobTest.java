@@ -31,8 +31,6 @@ import io.questdb.cairo.wal.TableWriterFrontend;
 import io.questdb.cairo.wal.WalWriter;
 import io.questdb.griffin.AbstractGriffinTest;
 import io.questdb.griffin.SqlException;
-import io.questdb.griffin.SqlUtil;
-import io.questdb.griffin.engine.ops.AlterOperation;
 import io.questdb.griffin.engine.ops.AlterOperationBuilder;
 import io.questdb.griffin.model.IntervalUtils;
 import io.questdb.std.*;
@@ -214,7 +212,7 @@ public class WalPurgeJobTest  extends AbstractGriffinTest {
                     + "ts timestamp"
                     + ") timestamp(ts) partition by DAY WAL");
             assertWalExistence(false, tableName, 1);
-            try (TableWriterFrontend twf = engine.getTableWriterFrontEnd(sqlExecutionContext.getCairoSecurityContext(), tableName, "test")) {
+            try (TableWriterFrontend twf = engine.getTableWriterFrontend(sqlExecutionContext.getCairoSecurityContext(), tableName, "test")) {
                 // No-op. We just want to create a WAL.
             }
 

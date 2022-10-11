@@ -25,7 +25,6 @@
 package io.questdb.cairo.wal;
 
 import io.questdb.cairo.*;
-import io.questdb.griffin.SqlException;
 import io.questdb.griffin.engine.ops.AlterOperation;
 import io.questdb.log.Log;
 import io.questdb.log.LogFactory;
@@ -244,8 +243,8 @@ public class SequencerImpl implements Sequencer {
         try {
             operation.apply(sequencerMetadataUpdater, true);
             metadata.syncToMetaFile();
-        } catch (SqlException e) {
-            throw CairoException.critical(0).put("error applying alter command to sequencer metadata [error=").put(e.getFlyweightMessage()).put(']');
+        } catch (CairoException e) {
+            throw CairoException.critical(0, e).put("error applying alter command to sequencer metadata [error=").putCauseMessage().put(']');
         }
     }
 

@@ -1855,7 +1855,7 @@ public class SqlCompiler implements Closeable {
         long insertCount;
 
         try (
-                TableWriterFrontend writer = engine.getTableWriterFrontEnd(executionContext.getCairoSecurityContext(), name.token, "insertAsSelect");
+                TableWriterFrontend writer = engine.getTableWriterFrontend(executionContext.getCairoSecurityContext(), name.token, "insertAsSelect");
                 RecordCursorFactory factory = generate(model.getQueryModel(), executionContext)
         ) {
             final RecordMetadata cursorMetadata = factory.getMetadata();
@@ -2376,7 +2376,7 @@ public class SqlCompiler implements Closeable {
                     tableExistsOrFail(lexer.lastTokenPosition(), tok, executionContext);
 
                     try {
-                        tableWriters.add(engine.getTableWriterFrontEnd(executionContext.getCairoSecurityContext(), tok, "truncateTables"));
+                        tableWriters.add(engine.getTableWriterFrontend(executionContext.getCairoSecurityContext(), tok, "truncateTables"));
                     } catch (CairoException e) {
                         LOG.info().$("table busy [table=").$(tok).$(", e=").$((Throwable) e).$(']').$();
                         throw SqlException.$(lexer.lastTokenPosition(), "table '").put(tok).put("' could not be truncated: ").put(e);

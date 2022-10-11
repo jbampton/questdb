@@ -360,12 +360,12 @@ public class PGConnectionContext extends AbstractMutableIOContext<PGConnectionCo
     }
 
     @Override
-    public TableWriterFrontend getTableWriterFrontEnd(CairoSecurityContext context, CharSequence name, String lockReason) {
+    public TableWriterFrontend getTableWriterFrontend(CairoSecurityContext context, CharSequence name, String lockReason) {
         final int index = pendingWriters.keyIndex(name);
         if (index < 0) {
             return pendingWriters.valueAt(index);
         }
-        return engine.getTableWriterFrontEnd(context, name, lockReason);
+        return engine.getTableWriterFrontend(context, name, lockReason);
     }
 
     public void handleClientOperation(

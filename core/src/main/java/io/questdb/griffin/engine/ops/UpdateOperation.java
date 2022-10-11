@@ -70,7 +70,7 @@ public class UpdateOperation extends AbstractOperation {
     }
 
     @Override
-    public long apply(TableWriterBackend tableWriter, boolean contextAllowsAnyStructureChanges) throws SqlException {
+    public long apply(TableWriterBackend tableWriter, boolean contextAllowsAnyStructureChanges) {
         return tableWriter.getUpdateOperator().executeUpdate(sqlExecutionContext, this);
     }
 

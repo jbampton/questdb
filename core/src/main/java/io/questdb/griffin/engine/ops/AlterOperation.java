@@ -24,19 +24,20 @@
 
 package io.questdb.griffin.engine.ops;
 
-import io.questdb.cairo.*;
+import io.questdb.cairo.AlterTableContextException;
+import io.questdb.cairo.AttachDetachStatus;
+import io.questdb.cairo.CairoException;
+import io.questdb.cairo.PartitionBy;
 import io.questdb.cairo.sql.RecordMetadata;
 import io.questdb.cairo.vm.MemoryFCRImpl;
 import io.questdb.cairo.vm.api.MemoryA;
 import io.questdb.cairo.vm.api.MemoryCR;
 import io.questdb.cairo.wal.TableWriterBackend;
-import io.questdb.griffin.SqlException;
 import io.questdb.log.Log;
 import io.questdb.log.LogFactory;
 import io.questdb.std.LongList;
 import io.questdb.std.Mutable;
 import io.questdb.std.ObjList;
-import io.questdb.std.Sinkable;
 import io.questdb.std.str.CharSink;
 import io.questdb.std.str.DirectCharSequence;
 import io.questdb.tasks.TableWriterTask;
@@ -61,8 +62,8 @@ public class AlterOperation extends AbstractOperation implements Mutable {
     private final ObjCharSequenceList objCharList;
     private final DirectCharSequenceList directCharList = new DirectCharSequenceList();
     private final LongList longList;
-    // This is only used to serialize Partition name in form 2020-02-12 or 2020-02 or 2020
-    // to exception message using TableUtils.setSinkForPartition
+    // This is only used to serialize partition name in form 2020-02-12 or 2020-02 or 2020
+    // to exception message using TableUtils.setSinkForPartition.
     private final ExceptionSinkAdapter exceptionSinkAdapter = new ExceptionSinkAdapter();
     private short command;
     private CharSequenceList charSequenceList;
@@ -79,72 +80,53 @@ public class AlterOperation extends AbstractOperation implements Mutable {
     }
 
     @Override
-    public long apply(TableWriterBackend tableWriter, boolean contextAllowsAnyStructureChanges) throws SqlException, AlterTableContextException {
-        try {
-            switch (command) {
-                case ADD_COLUMN:
-                    applyAddColumn(tableWriter);
-                    break;
-                case DROP_COLUMN:
-                    if (!contextAllowsAnyStructureChanges) {
-                        throw AlterTableContextException.INSTANCE;
-                    }
-                    applyDropColumn(tableWriter);
-                    break;
-                case RENAME_COLUMN:
-                    if (!contextAllowsAnyStructureChanges) {
-                        throw AlterTableContextException.INSTANCE;
-                    }
-                    applyRenameColumn(tableWriter);
-                    break;
-                case DROP_PARTITION:
-                    applyDropPartition(tableWriter);
-                    break;
-                case DETACH_PARTITION:
-                    applyDetachPartition(tableWriter);
-                    break;
-                case ATTACH_PARTITION:
-                    applyAttachPartition(tableWriter);
-                    break;
-                case ADD_INDEX:
-                    applyAddIndex(tableWriter);
-                    break;
-                case DROP_INDEX:
-                    applyDropIndex(tableWriter);
-                    break;
-                case ADD_SYMBOL_CACHE:
-                    applySetSymbolCache(tableWriter, true);
-                    break;
-                case REMOVE_SYMBOL_CACHE:
-                    applySetSymbolCache(tableWriter, false);
-                    break;
-                case SET_PARAM_MAX_UNCOMMITTED_ROWS:
-                    applyParamUncommittedRows(tableWriter);
-                    break;
-                case SET_PARAM_COMMIT_LAG:
-                    applyParamCommitLag(tableWriter);
-                    break;
-                default:
-                    LOG.error().$("Invalid alter table command [code=").$(command).$(" ,table=").$(tableName).I$();
-                    throw SqlException.$(tableNamePosition, "Invalid alter table command [code=").put(command).put(']');
-            }
-        } catch (EntryUnavailableException | SqlException ex) {
-            throw ex;
-        } catch (CairoException e2) {
-            LOG.error().$("table '")
-                    .$(tableName)
-                    .$("' could not be altered [")
-                    .$(e2.getErrno())
-                    .$("] ")
-                    .$(e2.getFlyweightMessage())
-                    .$();
-
-            throw SqlException.$(tableNamePosition, "table '")
-                    .put(tableName)
-                    .put("' could not be altered: [")
-                    .put(e2.getErrno())
-                    .put("] ")
-                    .put(e2.getFlyweightMessage());
+    public long apply(TableWriterBackend tableWriter, boolean contextAllowsAnyStructureChanges) throws AlterTableContextException {
+        switch (command) {
+            case ADD_COLUMN:
+                applyAddColumn(tableWriter);
+                break;
+            case DROP_COLUMN:
+                if (!contextAllowsAnyStructureChanges) {
+                    throw AlterTableContextException.INSTANCE;
+                }
+                applyDropColumn(tableWriter);
+                break;
+            case RENAME_COLUMN:
+                if (!contextAllowsAnyStructureChanges) {
+                    throw AlterTableContextException.INSTANCE;
+                }
+                applyRenameColumn(tableWriter);
+                break;
+            case DROP_PARTITION:
+                applyDropPartition(tableWriter);
+                break;
+            case DETACH_PARTITION:
+                applyDetachPartition(tableWriter);
+                break;
+            case ATTACH_PARTITION:
+                applyAttachPartition(tableWriter);
+                break;
+            case ADD_INDEX:
+                applyAddIndex(tableWriter);
+                break;
+            case DROP_INDEX:
+                applyDropIndex(tableWriter);
+                break;
+            case ADD_SYMBOL_CACHE:
+                applySetSymbolCache(tableWriter, true);
+                break;
+            case REMOVE_SYMBOL_CACHE:
+                applySetSymbolCache(tableWriter, false);
+                break;
+            case SET_PARAM_MAX_UNCOMMITTED_ROWS:
+                applyParamUncommittedRows(tableWriter);
+                break;
+            case SET_PARAM_COMMIT_LAG:
+                applyParamCommitLag(tableWriter);
+                break;
+            default:
+                LOG.error().$("invalid alter table command [code=").$(command).$(" , table=").$(tableName).I$();
+                throw CairoException.nonCritical().put("invalid alter table command [code=").put(command).put(']');
         }
         return 0;
     }
@@ -263,7 +245,7 @@ public class AlterOperation extends AbstractOperation implements Mutable {
         }
     }
 
-    private void applyAddColumn(TableWriterBackend tableWriter) throws SqlException {
+    private void applyAddColumn(TableWriterBackend tableWriter) {
         int lParam = 0;
         for (int i = 0, n = charSequenceList.size(); i < n; i++) {
             CharSequence columnName = charSequenceList.getStrA(i);
@@ -283,33 +265,39 @@ public class AlterOperation extends AbstractOperation implements Mutable {
                         false
                 );
             } catch (CairoException e) {
-                LOG.error().$("Cannot add column '").$(tableWriter.getTableName()).$('.').$(columnName).$("'. Exception: ").$((Sinkable) e).$();
-                throw SqlException.$(tableNamePosition, "could not add column [error=").put(e.getFlyweightMessage())
-                        .put(", errno=").put(e.getErrno())
-                        .put(']');
+                LOG.error().$("could not add column [table=").$(tableName)
+                        .$(", column=").$(columnName)
+                        .$(", errno=").$(e.getErrno())
+                        .$(", error=").$(e.getFlyweightMessage())
+                        .I$();
+                throw e;
             }
         }
     }
 
-    private void applyAddIndex(TableWriterBackend tableWriter) throws SqlException {
+    private void applyAddIndex(TableWriterBackend tableWriter) {
         CharSequence columnName = charSequenceList.getStrA(0);
         try {
             int indexValueBlockSize = (int) longList.get(0);
             tableWriter.addIndex(columnName, indexValueBlockSize);
         } catch (CairoException e) {
-            throw SqlException.position(tableNamePosition).put(e.getFlyweightMessage())
-                    .put("[errno=").put(e.getErrno()).put(']');
+            LOG.error().$("could not add index [table=").$(tableName)
+                    .$(", column=").$(columnName)
+                    .$(", errno=").$(e.getErrno())
+                    .$(", error=").$(e.getFlyweightMessage())
+                    .I$();
+            throw e;
         }
     }
 
-    private void applyAttachPartition(TableWriterBackend tableWriter) throws SqlException {
+    private void applyAttachPartition(TableWriterBackend tableWriter) {
         for (int i = 0, n = longList.size(); i < n; i++) {
             long partitionTimestamp = longList.getQuick(i);
             try {
                 AttachDetachStatus attachDetachStatus = tableWriter.attachPartition(partitionTimestamp);
                 if (attachDetachStatus != AttachDetachStatus.OK) {
                     throw putPartitionName(
-                            SqlException.$(tableNamePosition, "failed to attach partition '"),
+                            CairoException.nonCritical().put("failed to attach partition '"),
                             tableWriter.getPartitionBy(),
                             partitionTimestamp
                     ).put("': ").put(attachDetachStatus.name());
@@ -325,14 +313,15 @@ public class AlterOperation extends AbstractOperation implements Mutable {
         }
     }
 
-    private void applyDetachPartition(TableWriterBackend tableWriter) throws SqlException {
+    private void applyDetachPartition(TableWriterBackend tableWriter) {
         for (int i = 0, n = longList.size(); i < n; i++) {
             long partitionTimestamp = longList.getQuick(i);
             try {
                 AttachDetachStatus attachDetachStatus = tableWriter.detachPartition(partitionTimestamp);
                 if (AttachDetachStatus.OK != attachDetachStatus) {
                     throw putPartitionName(
-                            SqlException.$(tableNamePosition, "could not detach [statusCode=").put(attachDetachStatus.name())
+                            CairoException.nonCritical()
+                                    .put("could not detach [statusCode=").put(attachDetachStatus.name())
                                     .put(", table=").put(tableName)
                                     .put(", partition='"),
                             tableWriter.getPartitionBy(),
@@ -350,43 +339,50 @@ public class AlterOperation extends AbstractOperation implements Mutable {
         }
     }
 
-    private void applyDropColumn(TableWriterBackend writer) throws SqlException {
+    private void applyDropColumn(TableWriterBackend writer) {
         for (int i = 0, n = charSequenceList.size(); i < n; i++) {
             CharSequence columnName = charSequenceList.getStrA(i);
             RecordMetadata metadata = writer.getMetadata();
             if (metadata.getColumnIndexQuiet(columnName) == -1) {
-                throw SqlException.invalidColumn(tableNamePosition, columnName);
+                throw CairoException.nonCritical().put("invalid column: ").put(columnName);
             }
             try {
                 writer.removeColumn(columnName);
             } catch (CairoException e) {
-                LOG.error().$("cannot drop column '").$(writer.getTableName()).$('.').$(columnName).$("'. Exception: ").$((Sinkable) e).$();
-                throw SqlException.$(tableNamePosition, "cannot drop column [").put(e.getErrno()).put(']').put(e.getFlyweightMessage());
+                LOG.error().$("cannot drop column [table=").$(tableName)
+                        .$(", column=").$(columnName)
+                        .$(", errno=").$(e.getErrno())
+                        .$(", error=").$(e.getFlyweightMessage())
+                        .I$();
+                throw e;
             }
         }
     }
 
-    private void applyDropIndex(TableWriterBackend tableWriter) throws SqlException {
+    private void applyDropIndex(TableWriterBackend tableWriter) {
         CharSequence columnName = charSequenceList.getStrA(0);
         try {
             tableWriter.dropIndex(columnName);
         } catch (CairoException e) {
-            throw SqlException.position(tableNamePosition)
-                    .put(e.getFlyweightMessage())
-                    .put("[errno=")
-                    .put(e.getErrno())
-                    .put(']');
+            LOG.error().$("could not drop index [table=").$(tableName)
+                    .$(", column=").$(columnName)
+                    .$(", errno=").$(e.getErrno())
+                    .$(", error=").$(e.getFlyweightMessage())
+                    .I$();
+            throw e;
         }
     }
 
-    private void applyDropPartition(TableWriterBackend tableWriter) throws SqlException {
+    private void applyDropPartition(TableWriterBackend tableWriter) {
         for (int i = 0, n = longList.size(); i < n; i++) {
             long partitionTimestamp = longList.getQuick(i);
             try {
                 if (!tableWriter.removePartition(partitionTimestamp)) {
-                    throw putPartitionName(SqlException.$(tableNamePosition, "could not remove partition '"),
+                    throw putPartitionName(
+                            CairoException.nonCritical().put("could not remove partition '"),
                             tableWriter.getPartitionBy(),
-                            partitionTimestamp).put('\'');
+                            partitionTimestamp
+                    ).put('\'');
                 }
             } catch (CairoException e) {
                 LOG.error().$("failed to drop partition [table=").$(tableName)
@@ -394,27 +390,39 @@ public class AlterOperation extends AbstractOperation implements Mutable {
                         .$(", errno=").$(e.getErrno())
                         .$(", error=").$(e.getFlyweightMessage())
                         .I$();
-
-                throw putPartitionName(SqlException.$(tableNamePosition, "could not remove partition '"),
-                        tableWriter.getPartitionBy(),
-                        partitionTimestamp).put("'. ")
-                        .put(e.getFlyweightMessage());
+                throw e;
             }
         }
     }
 
     private void applyParamCommitLag(TableWriterBackend tableWriter) {
         long commitLag = longList.get(0);
-        tableWriter.setMetaCommitLag(commitLag);
+        try {
+            tableWriter.setMetaCommitLag(commitLag);
+        } catch (CairoException e) {
+            LOG.error().$("could not change commit lag [table=").$(tableName)
+                    .$(", errno=").$(e.getErrno())
+                    .$(", error=").$(e.getFlyweightMessage())
+                    .I$();
+            throw e;
+        }
     }
 
     private void applyParamUncommittedRows(TableWriterBackend tableWriter) {
         int maxUncommittedRows = (int) longList.get(0);
-        tableWriter.setMetaMaxUncommittedRows(maxUncommittedRows);
+        try {
+            tableWriter.setMetaMaxUncommittedRows(maxUncommittedRows);
+        } catch (CairoException e) {
+            LOG.error().$("could not change max uncommitted rows [table=").$(tableName)
+                    .$(", errno=").$(e.getErrno())
+                    .$(", error=").$(e.getFlyweightMessage())
+                    .I$();
+            throw e;
+        }
     }
 
-    private void applyRenameColumn(TableWriterBackend writer) throws SqlException {
-        // To not store 2 var len fields, store only new name as CharSequence
+    private void applyRenameColumn(TableWriterBackend writer) {
+        // Not to store 2 var len fields, store only new name as CharSequence
         // and index of existing column store as
         int i = 0, n = charSequenceList.size();
         while (i < n) {
@@ -423,22 +431,34 @@ public class AlterOperation extends AbstractOperation implements Mutable {
             try {
                 writer.renameColumn(columnName, newName);
             } catch (CairoException e) {
-                LOG.error().$("cannot rename column '").$(writer.getTableName()).$('.').$(columnName).$("'. Exception: ").$((Sinkable) e).$();
-                throw SqlException.$(tableNamePosition, "cannot rename column \"").put(columnName).put("\", errno=").put(e.getErrno()).put(", error=").put(e.getFlyweightMessage());
+                LOG.error().$("cannot rename column [table=").$(tableName)
+                        .$(", column=").$(columnName)
+                        .$(", errno=").$(e.getErrno())
+                        .$(", error=").$(e.getFlyweightMessage())
+                        .I$();
+                throw e;
             }
         }
     }
 
-    private void applySetSymbolCache(TableWriterBackend tableWriter, boolean isCacheOn) throws SqlException {
+    private void applySetSymbolCache(TableWriterBackend tableWriter, boolean isCacheOn) {
         CharSequence columnName = charSequenceList.getStrA(0);
-        int columnIndex = tableWriter.getMetadata().getColumnIndexQuiet(columnName);
-        if (columnIndex == -1) {
-            throw SqlException.invalidColumn(tableNamePosition, columnName);
+        try {
+            int columnIndex = tableWriter.getMetadata().getColumnIndexQuiet(columnName);
+            if (columnIndex == -1) {
+                throw CairoException.nonCritical().put("invalid column: ").put(columnName);
+            }
+            tableWriter.changeCacheFlag(columnIndex, isCacheOn);
+        } catch (CairoException e) {
+            LOG.error().$("could not change symbol cache flag [table=").$(tableName)
+                    .$(", errno=").$(e.getErrno())
+                    .$(", error=").$(e.getFlyweightMessage())
+                    .I$();
+            throw e;
         }
-        tableWriter.changeCacheFlag(columnIndex, isCacheOn);
     }
 
-    private SqlException putPartitionName(SqlException ex, int partitionBy, long timestamp) {
+    private CairoException putPartitionName(CairoException ex, int partitionBy, long timestamp) {
         PartitionBy.setSinkForPartition(exceptionSinkAdapter.of(ex), partitionBy, timestamp, false);
         return ex;
     }
@@ -454,7 +474,7 @@ public class AlterOperation extends AbstractOperation implements Mutable {
     // This is only used to serialize Partition name in form 2020-02-12 or 2020-02 or 2020
     // to exception message using TableUtils.setSinkForPartition
     private static class ExceptionSinkAdapter implements CharSink {
-        private SqlException ex;
+        private CairoException ex;
 
         @Override
         public int encodeSurrogate(char c, CharSequence in, int pos, int hi) {
@@ -490,7 +510,7 @@ public class AlterOperation extends AbstractOperation implements Mutable {
             return this;
         }
 
-        ExceptionSinkAdapter of(SqlException ex) {
+        ExceptionSinkAdapter of(CairoException ex) {
             this.ex = ex;
             return this;
         }
@@ -555,7 +575,7 @@ public class AlterOperation extends AbstractOperation implements Mutable {
 
         public long of(MemoryCR buffer, long lo, long hi) {
             long initialAddress = lo;
-            if (lo + Integer.BYTES >= hi) {
+            if (lo + Integer.BYTES > hi) {
                 throw CairoException.critical(0).put("invalid alter statement serialized to writer queue [11]");
             }
             int size = buffer.getInt(lo);

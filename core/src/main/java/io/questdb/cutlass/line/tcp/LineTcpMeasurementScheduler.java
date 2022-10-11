@@ -118,7 +118,9 @@ class LineTcpMeasurementScheduler implements Closeable {
                             lineConfiguration.isStringToCharCastAllowed(),
                             lineConfiguration.isSymbolAsFieldSupported(),
                             lineConfiguration.getMaxFileNameLength(),
-                            lineConfiguration.getAutoCreateNewColumns()
+                            lineConfiguration.getAutoCreateNewColumns(),
+                            engine.getConfiguration().getDefaultSymbolCapacity(),
+                            engine.getConfiguration().getDefaultSymbolCacheFlag()
                     ),
                     getEventSlotSize(maxMeasurementSize),
                     queueSize,
@@ -278,6 +280,11 @@ class LineTcpMeasurementScheduler implements Closeable {
                                 .put("table does not exist, cannot create table, creating new columns is disabled [table=").put(tableNameUtf16)
                                 .put(']');
                     }
+                    if (tableStructureAdapter.isWalEnabled() && !PartitionBy.isPartitioned(tableStructureAdapter.getPartitionBy())) {
+                        throw CairoException.nonCritical()
+                                .put("cannot create non-partitioned table with WAL Write Mode [table=").put(tableNameUtf16)
+                                .put(']');
+                    }
                     // validate that parser entities do not contain NULLs
                     TableStructureAdapter tsa = tableStructureAdapter.of(tableNameUtf16, parser);
                     for (int i = 0, n = tsa.getColumnCount(); i < n; i++) {
@@ -391,7 +398,7 @@ class LineTcpMeasurementScheduler implements Closeable {
                 // get writer here to avoid constructing
                 // object instance and potentially leaking memory if
                 // writer allocation fails
-                engine.getWriter(securityContext, tableNameUtf16, "tcpIlp"),
+                engine.getTableWriterFrontend(securityContext, tableNameUtf16, "tcpIlp"),
                 threadId,
                 netIoJobs,
                 defaultColumnTypes

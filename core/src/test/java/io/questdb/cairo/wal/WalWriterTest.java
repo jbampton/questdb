@@ -30,7 +30,6 @@ import io.questdb.cairo.security.AllowAllCairoSecurityContext;
 import io.questdb.cairo.sql.Record;
 import io.questdb.cairo.sql.RecordCursor;
 import io.questdb.griffin.AbstractGriffinTest;
-import io.questdb.griffin.SqlException;
 import io.questdb.griffin.SqlUtil;
 import io.questdb.griffin.engine.ops.AlterOperationBuilder;
 import io.questdb.mp.SOCountDownLatch;
@@ -347,7 +346,7 @@ public class WalWriterTest extends AbstractGriffinTest {
                     fail("Exception expected");
                 } catch(Exception e) {
                     // this exception will be handled in ILP/PG/HTTP
-                    assertTrue(e.getMessage().startsWith("[0] could not apply table definition changes to the current transaction. could not add column [error=could not open read-write"));
+                    assertTrue(e.getMessage().startsWith("[0] could not apply table definition changes to the current transaction. [2] could not open read-write"));
                 }
             }
         });
@@ -729,7 +728,7 @@ public class WalWriterTest extends AbstractGriffinTest {
                     addColumn(walWriter, "c", ColumnType.SHORT);
                     fail("Should not be able to add duplicate column");
                 } catch (CairoException e) {
-                    assertEquals("[-1] could not add column [error=duplicate column name: c, errno=0]", e.getMessage());
+                    assertEquals("[-1] duplicate column name: c", e.getMessage());
                 }
 
                 row = walWriter.newRow();
@@ -2070,7 +2069,7 @@ public class WalWriterTest extends AbstractGriffinTest {
                     removeColumn(walWriter, "noColLikeThis");
                     fail("Should not be able to remove non existent column");
                 } catch (CairoException e) {
-                    TestUtils.assertContains(e.getMessage(), "Invalid column: noColLikeThis");
+                    TestUtils.assertContains(e.getMessage(), "invalid column: noColLikeThis");
                 }
                 row = walWriter.newRow();
                 row.putByte(0, (byte) 10);
@@ -2909,19 +2908,19 @@ public class WalWriterTest extends AbstractGriffinTest {
         });
     }
 
-    static void addColumn(TableWriterFrontend writer, String columnName, int columnType) throws SqlException {
+    static void addColumn(TableWriterFrontend writer, String columnName, int columnType) {
         AlterOperationBuilder addColumnC = new AlterOperationBuilder().ofAddColumn(0, Chars.toString(writer.getTableName()), 0);
         addColumnC.ofAddColumn(columnName, columnType, 0, false, false, 0);
         writer.applyAlter(addColumnC.build(), true);
     }
 
-    static void removeColumn(TableWriterFrontend writer, String columnName) throws SqlException {
+    static void removeColumn(TableWriterFrontend writer, String columnName) {
         AlterOperationBuilder removeColumnOperation = new AlterOperationBuilder().ofDropColumn(0, Chars.toString(writer.getTableName()), 0);
         removeColumnOperation.ofDropColumn(columnName);
         writer.applyAlter(removeColumnOperation.build(), true);
     }
 
-    static void renameColumn(TableWriterFrontend writer, String columnName, String newColumnName) throws SqlException {
+    static void renameColumn(TableWriterFrontend writer, String columnName, String newColumnName) {
         AlterOperationBuilder renameColumnC = new AlterOperationBuilder().ofRenameColumn(0, Chars.toString(writer.getTableName()), 0);
         renameColumnC.ofRenameColumn(columnName, newColumnName);
         writer.applyAlter(renameColumnC.build(), true);

@@ -26,7 +26,6 @@ package io.questdb.cairo.wal;
 
 import io.questdb.cairo.*;
 import io.questdb.cairo.security.AllowAllCairoSecurityContext;
-import io.questdb.griffin.SqlException;
 import io.questdb.log.Log;
 import io.questdb.log.LogFactory;
 import io.questdb.mp.AbstractQueueConsumerJob;
@@ -160,8 +159,8 @@ public class ApplyWal2TableJob extends AbstractQueueConsumerJob<WalTxnNotificati
                 }
 
                 // Always set full path when using thread static path
-                tempPath.of(engine.getConfiguration().getRoot()).concat(writer.getTableName()).slash().put(WAL_NAME_BASE).put(walId).slash().put(segmentId);
                 if (walId != TxnCatalog.METADATA_WALID) {
+                    tempPath.of(engine.getConfiguration().getRoot()).concat(writer.getTableName()).slash().put(WAL_NAME_BASE).put(walId).slash().put(segmentId);
                     writer.processWalCommit(tempPath, segmentTxn, sqlToOperation);
                 } else {
                     // This is metadata change
@@ -184,10 +183,10 @@ public class ApplyWal2TableJob extends AbstractQueueConsumerJob<WalTxnNotificati
                     if (hasNext) {
                         try {
                             reusableStructureChangeCursor.next().apply(writer, true);
-                        } catch (SqlException e) {
-                            throw CairoException.critical(0)
+                        } catch (CairoException e) {
+                            throw CairoException.critical(0, e)
                                     .put("cannot apply structure change from WAL to table [error=")
-                                    .put(e.getFlyweightMessage()).put(']');
+                                    .putCauseMessage().put(']');
                         }
                     } else {
                         // Something messed up in sequencer.

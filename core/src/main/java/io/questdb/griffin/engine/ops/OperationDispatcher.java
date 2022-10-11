@@ -59,7 +59,7 @@ public abstract class OperationDispatcher<T extends AbstractOperation> {
         operation.withContext(sqlExecutionContext);
         boolean isDone = false;
         try (
-                TableWriterFrontend writer = engine.getTableWriterFrontEnd(
+                TableWriterFrontend writer = engine.getTableWriterFrontend(
                         sqlExecutionContext.getCairoSecurityContext(),
                         operation.getTableName(),
                         lockReason

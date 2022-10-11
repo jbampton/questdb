@@ -64,7 +64,7 @@ public class InsertOperationImpl implements InsertOperation {
     public InsertMethod createMethod(SqlExecutionContext executionContext, WriterSource writerSource) throws SqlException {
         initContext(executionContext);
         if (insertMethod.writer == null) {
-            final TableWriterFrontend writer = writerSource.getTableWriterFrontEnd(executionContext.getCairoSecurityContext(), tableName, "insert");
+            final TableWriterFrontend writer = writerSource.getTableWriterFrontend(executionContext.getCairoSecurityContext(), tableName, "insert");
             if (writer.getStructureVersion() != structureVersion) {
                 writer.close();
                 throw WriterOutOfDateException.INSTANCE;

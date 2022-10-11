@@ -27,16 +27,16 @@ package io.questdb.cairo.wal;
 import io.questdb.cairo.AlterTableContextException;
 import io.questdb.cairo.BaseRecordMetadata;
 import io.questdb.cairo.TableWriter;
-import io.questdb.griffin.SqlException;
 import io.questdb.griffin.engine.ops.AlterOperation;
 import io.questdb.griffin.engine.ops.UpdateOperation;
 
 import java.io.Closeable;
 
 public interface TableWriterFrontend extends Closeable {
-    long applyAlter(AlterOperation operation, boolean contextAllowsAnyStructureChanges)  throws SqlException, AlterTableContextException;
 
-    long applyUpdate(UpdateOperation operation)  throws SqlException;
+    long applyAlter(AlterOperation operation, boolean contextAllowsAnyStructureChanges) throws AlterTableContextException;
+
+    long applyUpdate(UpdateOperation operation);
 
     long truncate();
 
@@ -45,6 +45,8 @@ public interface TableWriterFrontend extends Closeable {
 
     long commit();
 
+    long commitWithLag();
+
     long commitWithLag(long commitLag);
 
     BaseRecordMetadata getMetadata();
@@ -52,6 +54,8 @@ public interface TableWriterFrontend extends Closeable {
     long getStructureVersion();
 
     CharSequence getTableName();
+
+    long getUncommittedRowCount();
 
     TableWriter.Row newRow();
 

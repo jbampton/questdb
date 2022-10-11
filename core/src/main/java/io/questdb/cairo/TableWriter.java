@@ -312,10 +312,10 @@ public class TableWriter implements TableWriterFrontend, TableWriterBackend, Clo
             this.partitionFloorMethod = PartitionBy.getPartitionFloorMethod(partitionBy);
             this.partitionCeilMethod = PartitionBy.getPartitionCeilMethod(partitionBy);
             if (PartitionBy.isPartitioned(partitionBy)) {
-                partitionDirFmt = PartitionBy.getPartitionDirFormatMethod(partitionBy);
-                partitionTimestampHi = txWriter.getLastPartitionTimestamp();
+                this.partitionDirFmt = PartitionBy.getPartitionDirFormatMethod(partitionBy);
+                this.partitionTimestampHi = txWriter.getLastPartitionTimestamp();
             } else {
-                partitionDirFmt = null;
+                this.partitionDirFmt = null;
             }
             this.commitInterval = calculateCommitInterval();
 
@@ -764,12 +764,12 @@ public class TableWriter implements TableWriterFrontend, TableWriterBackend, Clo
     }
 
     @Override
-    public long applyAlter(AlterOperation operation, boolean contextAllowsAnyStructureChanges) throws AlterTableContextException, SqlException {
+    public long applyAlter(AlterOperation operation, boolean contextAllowsAnyStructureChanges) throws AlterTableContextException {
         return operation.apply(this, contextAllowsAnyStructureChanges);
     }
 
     @Override
-    public long applyUpdate(UpdateOperation operation) throws SqlException {
+    public long applyUpdate(UpdateOperation operation) {
         return operation.apply(this, false);
     }
 
@@ -780,6 +780,7 @@ public class TableWriter implements TableWriterFrontend, TableWriterBackend, Clo
         }
     }
 
+    @Override
     public long commit() {
         return commit(defaultCommitMode);
     }
@@ -788,10 +789,12 @@ public class TableWriter implements TableWriterFrontend, TableWriterBackend, Clo
         return commit(commitMode, 0);
     }
 
+    @Override
     public long commitWithLag() {
         return commit(defaultCommitMode, metadata.getCommitLag());
     }
 
+    @Override
     public long commitWithLag(long lagMicros) {
         return commit(defaultCommitMode, lagMicros);
     }
@@ -1030,6 +1033,7 @@ public class TableWriter implements TableWriterFrontend, TableWriterBackend, Clo
         return colTop > -1L ? colTop : defaultValue;
     }
 
+    @Override
     public long getCommitInterval() {
         return commitInterval;
     }
@@ -1132,6 +1136,7 @@ public class TableWriter implements TableWriterFrontend, TableWriterBackend, Clo
         return txnScoreboard;
     }
 
+    @Override
     public long getUncommittedRowCount() {
         return (masterRef - committedMasterRef) >> 1;
     }
@@ -1254,6 +1259,7 @@ public class TableWriter implements TableWriterFrontend, TableWriterBackend, Clo
         }
     }
 
+    // TODO this method doesn't work with PARTITION BY NONE, so we may need to fix it or reject creation of WAL tables with such
     public boolean processWalBlock(
             @Transient Path walPath,
             int timestampIndex,
@@ -1346,6 +1352,8 @@ public class TableWriter implements TableWriterFrontend, TableWriterBackend, Clo
                 processWalSql(sqlInfo, sqlToOperation);
                 break;
             case TRUNCATE:
+                // TODO(puzpuzpuz): this implementation is broken because of ILP I/O threads' symbol cache
+                //                  and also concurrent table readers
                 truncate();
                 break;
             default:
@@ -1850,6 +1858,12 @@ public class TableWriter implements TableWriterFrontend, TableWriterBackend, Clo
         }
     }
 
+    @Override
+    public long getMetaMaxUncommittedRows() {
+        return metadata.getMaxUncommittedRows();
+    }
+
+    @Override
     public void setMetaMaxUncommittedRows(int maxUncommittedRows) {
         try {
             commit();
@@ -1881,6 +1895,7 @@ public class TableWriter implements TableWriterFrontend, TableWriterBackend, Clo
      * Does not accept structure changes, e.g. equivalent to tick(false)
      * Some tick calls can result into transaction commit.
      */
+    @Override
     public void tick() {
         tick(false);
     }
@@ -1974,6 +1989,7 @@ public class TableWriter implements TableWriterFrontend, TableWriterBackend, Clo
         return txWriter.getTxn();
     }
 
+    @Override
     public void updateCommitInterval(double commitIntervalFraction, long commitIntervalDefault) {
         this.commitIntervalFraction = commitIntervalFraction;
         this.commitIntervalDefault = commitIntervalDefault;
@@ -4558,9 +4574,9 @@ public class TableWriter implements TableWriterFrontend, TableWriterBackend, Clo
                     .I$();
             errorCode = STRUCTURE_CHANGE_NOT_ALLOWED;
             errorMsg = "async cmd cannot change table structure while writer is busy";
-        } catch (SqlException | CairoException ex) {
-            errorCode = SQL_OR_CAIRO_ERROR;
-            errorMsg = ex.getFlyweightMessage();
+        } catch (CairoException ex) {
+            errorCode = CAIRO_ERROR;
+            errorMsg = "async cmd failed: " + ex.getFlyweightMessage();
         } catch (Throwable ex) {
             LOG.error().$("error on processing async cmd [type=").$(cmdType)
                     .$(", tableName=").utf8(tableName)

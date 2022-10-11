@@ -140,7 +140,7 @@ public class CairoEngine implements Closeable, WriterSource, WalWriterSource {
             } else if (cursor == -1L) {
                 LOG.info().$("cannot publish WAL notifications, queue is full [current=")
                         .$(pubSeq.current()).$(", table=").$(tableName)
-                        .$();
+                        .I$();
                 // Oh, no queue overflow! Throw away notification and trigger a job to rescan all the tables
                 notifyWalTxnFailed();
                 return;
@@ -308,7 +308,7 @@ public class CairoEngine implements Closeable, WriterSource, WalWriterSource {
     }
 
     @Override
-    public TableWriterFrontend getTableWriterFrontEnd(
+    public TableWriterFrontend getTableWriterFrontend(
             CairoSecurityContext securityContext,
             CharSequence tableName,
             @Nullable String lockReason
@@ -324,9 +324,11 @@ public class CairoEngine implements Closeable, WriterSource, WalWriterSource {
         failedWalTxnCount.incrementAndGet();
     }
 
+    @TestOnly
     public void setPoolListener(PoolListener poolListener) {
         this.writerPool.setPoolListener(poolListener);
         this.readerPool.setPoolListener(poolListener);
+        this.tableRegistry.setPoolListener(poolListener);
     }
 
     public TableReader getReader(

@@ -307,7 +307,8 @@ public class TxnCatalog implements Closeable {
                 long fromStructureVersion,
                 FilesFacade ff,
                 MemorySerializer serializer,
-                final Path path) {
+                final Path path
+        ) {
             reset();
 
             final long fdTxn = openFileRO(ff, path, CATALOG_FILE_NAME);

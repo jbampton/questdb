@@ -24,18 +24,17 @@
 
 package io.questdb.cairo.wal;
 
-import io.questdb.cairo.*;
+import io.questdb.cairo.CairoConfiguration;
+import io.questdb.cairo.CairoEngine;
+import io.questdb.cairo.CairoError;
+import io.questdb.cairo.TableStructure;
 import io.questdb.cairo.pool.AbstractPool;
 import io.questdb.cairo.pool.PoolListener;
 import io.questdb.cairo.pool.ex.PoolClosedException;
 import io.questdb.griffin.engine.ops.AlterOperation;
 import io.questdb.log.Log;
 import io.questdb.log.LogFactory;
-import io.questdb.std.Chars;
-import io.questdb.std.ConcurrentHashMap;
-import io.questdb.std.Files;
-import io.questdb.std.FilesFacade;
-import io.questdb.std.Misc;
+import io.questdb.std.*;
 import io.questdb.std.str.Path;
 import io.questdb.std.str.StringSink;
 import org.jetbrains.annotations.NotNull;
@@ -52,11 +51,17 @@ public class TableRegistry extends AbstractPool {
     private final ConcurrentHashMap<SequencerEntry> seqRegistry = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<WalWriterPool> walRegistry = new ConcurrentHashMap<>();
     private final CairoEngine engine;
+    private PoolListener poolListener;
 
     public TableRegistry(CairoEngine engine, CairoConfiguration configuration) {
         super(configuration, configuration.getInactiveWriterTTL()); //todo: separate config option
         this.engine = engine;
         notifyListener(Thread.currentThread().getId(), "TableRegistry", PoolListener.EV_POOL_OPEN);
+    }
+
+    public void setPoolListener(PoolListener eventListener) {
+        this.poolListener = eventListener;
+        walRegistry.forEach((tableName, pool) -> pool.setEventListener(eventListener));
     }
 
     public long lastTxn(final CharSequence tableName) {
@@ -148,13 +153,16 @@ public class TableRegistry extends AbstractPool {
         return getWalPool(tableName).get();
     }
 
-    // Check if sequencer files exist, e.g. is it WAL table sequencer must exist
+    /**
+     * Check if sequencer files exist, e.g. is it WAL table sequencer must exist
+     */
     private static boolean isWalTable(final CharSequence tableName, final CharSequence root, final FilesFacade ff) {
         Path path = Path.getThreadLocal2(root);
         return isWalTable(tableName, path, ff);
     }
 
-    private static boolean isWalTable(final CharSequence tableName, final Path root, final FilesFacade ff) {
+    // kept visible for tests
+    public static boolean isWalTable(final CharSequence tableName, final Path root, final FilesFacade ff) {
         root.concat(tableName).concat(SEQ_DIR);
         return ff.exists(root.$());
     }
@@ -207,7 +215,7 @@ public class TableRegistry extends AbstractPool {
         throwIfClosed();
         final String tableNameStr = Chars.toString(tableName);
         return walRegistry.computeIfAbsent(tableNameStr, key
-                -> new WalWriterPool(tableNameStr, this, engine.getConfiguration()));
+                -> new WalWriterPool(tableNameStr, this, engine.getConfiguration(), poolListener));
     }
 
     @Override
@@ -303,12 +311,25 @@ public class TableRegistry extends AbstractPool {
         private final String tableName;
         private final TableRegistry tableRegistry;
         private final CairoConfiguration configuration;
+        private PoolListener eventListener;
         private volatile boolean closed;
 
-        public WalWriterPool(String tableName, TableRegistry tableRegistry, CairoConfiguration configuration) {
+        public WalWriterPool(String tableName, TableRegistry tableRegistry, CairoConfiguration configuration, PoolListener eventListener) {
             this.tableName = tableName;
             this.tableRegistry = tableRegistry;
             this.configuration = configuration;
+            this.eventListener = eventListener;
+            notifyListener(Thread.currentThread().getId(), null, PoolListener.EV_POOL_OPEN);
+        }
+
+        public void setEventListener(PoolListener eventListener) {
+            this.eventListener = eventListener;
+        }
+
+        private void notifyListener(long thread, CharSequence name, short event) {
+            if (eventListener != null) {
+                eventListener.onEvent(PoolListener.SRC_WRITER, thread, name, event, (short) 0, (short) 0);
+            }
         }
 
         public Entry get() {
@@ -320,6 +341,7 @@ public class TableRegistry extends AbstractPool {
 
                     if (obj == null) {
                         obj = new Entry(tableName, tableRegistry, configuration, this);
+                        notifyListener(Thread.currentThread().getId(), tableName, PoolListener.EV_CREATE);
                     } else {
                         if (!obj.goActive()) {
                             obj = Misc.free(obj);
@@ -353,6 +375,7 @@ public class TableRegistry extends AbstractPool {
                     }
                     cache.push(obj);
                     obj.releaseTime = configuration.getMicrosecondClock().getTicks();
+                    notifyListener(Thread.currentThread().getId(), tableName, PoolListener.EV_RETURN);
                     return true;
                 }
             } finally {

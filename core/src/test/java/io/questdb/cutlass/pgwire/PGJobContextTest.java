@@ -66,14 +66,10 @@ import org.postgresql.util.PSQLException;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.sql.Date;
 import java.sql.*;
 import java.text.SimpleDateFormat;
-import java.util.GregorianCalendar;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.List;
-import java.util.Properties;
-import java.util.TimeZone;
+import java.util.*;
 import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
@@ -123,14 +119,14 @@ public class PGJobContextTest extends BasePGTest {
 
     private final boolean walEnabled;
 
-    public PGJobContextTest(boolean walEnabled) {
-        this.walEnabled = walEnabled;
+    public PGJobContextTest(WalMode walMode) {
+        this.walEnabled = (walMode == WalMode.WITH_WAL);
     }
 
-    @Parameters
+    @Parameters(name="{0}")
     public static Collection<Object[]> data() {
         return Arrays.asList(new Object[][] {
-                { false }, { true }
+                { WalMode.WITH_WAL }, { WalMode.NO_WAL }
         });
     }
 
@@ -155,12 +151,6 @@ public class PGJobContextTest extends BasePGTest {
     public void setUp() {
         defaultTableWriteMode = walEnabled ? 1 : 0;
         super.setUp();
-    }
-
-    @After
-    public void tearDown() {
-        super.tearDown();
-        defaultTableWriteMode = -1;
     }
 
     private void mayDrainWalQueue() {
@@ -2339,7 +2329,7 @@ if __name__ == "__main__":
      * }
      * </pre>
      */
-    public void testGoLangBoolean() throws Exception {
+    public void testGolangBoolean() throws Exception {
         final String script = ">0000000804d2162f\n" +
                 "<4e\n" +
                 ">0000002400030000757365720078797a00646174616261736500706f7374677265730000\n" +

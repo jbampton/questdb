@@ -36,7 +36,8 @@ import io.questdb.std.str.StringSink;
 
 import java.io.Closeable;
 
-import static io.questdb.cairo.TableUtils.*;
+import static io.questdb.cairo.TableUtils.EVENT_FILE_NAME;
+import static io.questdb.cairo.TableUtils.openSmallFile;
 import static io.questdb.cairo.wal.WalUtils.WAL_FORMAT_VERSION;
 
 class WalWriterEvents implements Closeable {
@@ -121,7 +122,7 @@ class WalWriterEvents implements Closeable {
         startOffset = eventMem.getAppendOffset() - Integer.BYTES;
         eventMem.putLong(txn);
         eventMem.putByte(WalTxnType.SQL);
-        eventMem.putInt(cmdType); //byte would be enough probably
+        eventMem.putInt(cmdType); // byte would be enough probably
         eventMem.putStr(sql);
         final BindVariableService bindVariableService = sqlExecutionContext.getBindVariableService();
         writeIndexedVariables(bindVariableService);

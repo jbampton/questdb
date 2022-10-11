@@ -61,7 +61,7 @@ public class WalTableFailureTest extends AbstractGriffinTest {
             String tableName = testName.getMethodName();
             creatStandardWalTable(tableName);
 
-            try (TableWriterFrontend twf = engine.getTableWriterFrontEnd(sqlExecutionContext.getCairoSecurityContext(), tableName, "test")) {
+            try (TableWriterFrontend twf = engine.getTableWriterFrontend(sqlExecutionContext.getCairoSecurityContext(), tableName, "test")) {
                 AtomicInteger counter = new AtomicInteger(2);
                 AlterOperation dodgyAlter = new AlterOperation() {
                     @Override
@@ -103,7 +103,7 @@ public class WalTableFailureTest extends AbstractGriffinTest {
             String tableName = testName.getMethodName();
             creatStandardWalTable(tableName);
 
-            try (TableWriterFrontend twf = engine.getTableWriterFrontEnd(sqlExecutionContext.getCairoSecurityContext(), tableName, "test")) {
+            try (TableWriterFrontend twf = engine.getTableWriterFrontend(sqlExecutionContext.getCairoSecurityContext(), tableName, "test")) {
                 AlterOperation dodgyAlter = new AlterOperation() {
                     @Override
                     public long apply(TableWriterBackend tableWriter, boolean contextAllowsAnyStructureChanges) throws AlterTableContextException {
@@ -180,7 +180,7 @@ public class WalTableFailureTest extends AbstractGriffinTest {
             String tableName = testName.getMethodName();
             creatStandardWalTable(tableName);
 
-            try (TableWriterFrontend twf = engine.getTableWriterFrontEnd(sqlExecutionContext.getCairoSecurityContext(), tableName, "test")) {
+            try (TableWriterFrontend twf = engine.getTableWriterFrontend(sqlExecutionContext.getCairoSecurityContext(), tableName, "test")) {
                 AlterOperation dodgyAlter = new AlterOperation() {
                     @Override
                     public long apply(TableWriterBackend tableWriter, boolean contextAllowsAnyStructureChanges) throws AlterTableContextException {
@@ -231,8 +231,8 @@ public class WalTableFailureTest extends AbstractGriffinTest {
             AlterOperationBuilder alterBuilder = new AlterOperationBuilder().ofDropColumn(1, tableName, 0);
             AlterOperation alterOperation = alterBuilder.ofDropColumn("non_existing_column").build();
 
-            try (TableWriterFrontend alterWriter = engine.getTableWriterFrontEnd(sqlExecutionContext.getCairoSecurityContext(), tableName, "test");
-                 TableWriterFrontend insertWriter = engine.getTableWriterFrontEnd(sqlExecutionContext.getCairoSecurityContext(), tableName, "test")) {
+            try (TableWriterFrontend alterWriter = engine.getTableWriterFrontend(sqlExecutionContext.getCairoSecurityContext(), tableName, "test");
+                 TableWriterFrontend insertWriter = engine.getTableWriterFrontend(sqlExecutionContext.getCairoSecurityContext(), tableName, "test")) {
 
                 // Serialize into WAL sequencer a drop column operation of non-existing column
                 // So that it will fail during application to other WAL writers
@@ -323,8 +323,8 @@ public class WalTableFailureTest extends AbstractGriffinTest {
             drainWalQueue();
 
             AlterOperation alterOperation = null;
-            try (TableWriterFrontend alterWriter = engine.getTableWriterFrontEnd(sqlExecutionContext.getCairoSecurityContext(), tableName, "test");
-                 TableWriterFrontend insertWriter = engine.getTableWriterFrontEnd(sqlExecutionContext.getCairoSecurityContext(), tableName, "test")) {
+            try (TableWriterFrontend alterWriter = engine.getTableWriterFrontend(sqlExecutionContext.getCairoSecurityContext(), tableName, "test");
+                 TableWriterFrontend insertWriter = engine.getTableWriterFrontend(sqlExecutionContext.getCairoSecurityContext(), tableName, "test")) {
 
                 AlterOperationBuilder alterBuilder = new AlterOperationBuilder().ofRenameColumn(1, tableName, 0);
                 alterBuilder.ofRenameColumn("x", "x2");
@@ -371,7 +371,7 @@ public class WalTableFailureTest extends AbstractGriffinTest {
             String tableName = testName.getMethodName();
             creatStandardWalTable(tableName);
 
-            try (TableWriterFrontend twf = engine.getTableWriterFrontEnd(sqlExecutionContext.getCairoSecurityContext(), tableName, "test")) {
+            try (TableWriterFrontend twf = engine.getTableWriterFrontend(sqlExecutionContext.getCairoSecurityContext(), tableName, "test")) {
                 AtomicInteger counter = new AtomicInteger(2);
                 AlterOperation dodgyAlter = new AlterOperation() {
                     @Override
@@ -433,7 +433,7 @@ public class WalTableFailureTest extends AbstractGriffinTest {
             String tableName = testName.getMethodName();
             creatStandardWalTable(tableName);
 
-            try (TableWriterFrontend twf = engine.getTableWriterFrontEnd(sqlExecutionContext.getCairoSecurityContext(), tableName, "test")) {
+            try (TableWriterFrontend twf = engine.getTableWriterFrontend(sqlExecutionContext.getCairoSecurityContext(), tableName, "test")) {
                 AlterOperation dodgyAlter = new AlterOperation() {
                     @Override
                     public long apply(TableWriterBackend tableWriter, boolean contextAllowsAnyStructureChanges) throws AlterTableContextException {
@@ -765,8 +765,8 @@ public class WalTableFailureTest extends AbstractGriffinTest {
                 creatStandardWalTable(tableName);
                 drainWalQueue();
 
-                try (TableWriterFrontend alterWriter1 = engine.getTableWriterFrontEnd(sqlExecutionContext.getCairoSecurityContext(), tableName, "test");
-                     TableWriterFrontend alterWriter2 = engine.getTableWriterFrontEnd(sqlExecutionContext.getCairoSecurityContext(), tableName, "test")) {
+                try (TableWriterFrontend alterWriter1 = engine.getTableWriterFrontend(sqlExecutionContext.getCairoSecurityContext(), tableName, "test");
+                     TableWriterFrontend alterWriter2 = engine.getTableWriterFrontend(sqlExecutionContext.getCairoSecurityContext(), tableName, "test")) {
 
                     alterWriter1.applyAlter(alterOperation, true);
                     try {
@@ -789,7 +789,7 @@ public class WalTableFailureTest extends AbstractGriffinTest {
                 creatStandardWalTable(tableName);
                 drainWalQueue();
 
-                try (TableWriterFrontend alterWriter2 = engine.getTableWriterFrontEnd(sqlExecutionContext.getCairoSecurityContext(), tableName, "test")) {
+                try (TableWriterFrontend alterWriter2 = engine.getTableWriterFrontend(sqlExecutionContext.getCairoSecurityContext(), tableName, "test")) {
 
                     try {
                         alterWriter2.applyAlter(alterOperation, true);

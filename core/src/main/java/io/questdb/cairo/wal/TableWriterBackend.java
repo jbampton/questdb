@@ -97,4 +97,12 @@ public interface TableWriterBackend {
     void setMetaCommitLag(long commitLag);
 
     void setMetaMaxUncommittedRows(int maxUncommittedRows);
+
+    long getMetaMaxUncommittedRows();
+
+    void updateCommitInterval(double commitIntervalFraction, long commitIntervalDefault);
+
+    long getCommitInterval();
+
+    void tick();
 }

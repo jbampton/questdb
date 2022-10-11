@@ -25,6 +25,7 @@
 package io.questdb.griffin;
 
 import io.questdb.cairo.CairoEngine;
+import io.questdb.cairo.CairoException;
 import io.questdb.cairo.sql.InsertOperation;
 import io.questdb.cairo.sql.OperationFuture;
 import io.questdb.cairo.sql.RecordCursorFactory;
@@ -57,17 +58,35 @@ public class CompiledQueryImpl implements CompiledQuery {
     private CharSequence statementName;
 
     public CompiledQueryImpl(CairoEngine engine) {
-        updateOperationDispatcher = new OperationDispatcher<UpdateOperation>(engine, "sync 'UPDATE' execution") {
+        updateOperationDispatcher = new OperationDispatcher<>(engine, "sync 'UPDATE' execution") {
             @Override
             protected long apply(UpdateOperation operation, TableWriterFrontend writerFronted) throws SqlException {
-                return writerFronted.applyUpdate(operation);
+                try {
+                    return writerFronted.applyUpdate(operation);
+                } catch (CairoException e) {
+                    throw SqlException.$(operation.getTableNamePosition(), "table '")
+                            .put(operation.getTableName())
+                            .put("' could not be updated: [")
+                            .put(e.getErrno())
+                            .put("] ")
+                            .put(e.getFlyweightMessage());
+                }
             }
         };
 
-        alterOperationDispatcher = new OperationDispatcher<AlterOperation>(engine, "Alter table execute") {
+        alterOperationDispatcher = new OperationDispatcher<>(engine, "Alter table execute") {
             @Override
             protected long apply(AlterOperation operation, TableWriterFrontend writerFronted) throws SqlException {
-                return writerFronted.applyAlter(operation, true);
+                try {
+                    return writerFronted.applyAlter(operation, true);
+                } catch (CairoException e) {
+                    throw SqlException.$(operation.getTableNamePosition(), "table '")
+                            .put(operation.getTableName())
+                            .put("' could not be altered: [")
+                            .put(e.getErrno())
+                            .put("] ")
+                            .put(e.getFlyweightMessage());
+                }
             }
         };
     }

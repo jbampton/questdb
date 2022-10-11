@@ -97,7 +97,8 @@ class SymbolCache implements Closeable, SymbolLookup {
         return symbolValueToKeyMap.capacity();
     }
 
-    void of(CairoConfiguration configuration,
+    void of(
+            CairoConfiguration configuration,
             Path path,
             CharSequence columnName,
             int symbolIndexInTxFile,
