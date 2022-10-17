@@ -1464,40 +1464,42 @@ public class TableWriter implements Closeable {
 
             // removing active partition
 
-            if (index == 0) {
-                // removing the very last partition is equivalent to truncating the table
-                truncate();
-                return true;
+            if  (index == 0){
+                // the last partition
+                columnVersionWriter.removePartition(timestamp);
+                txWriter.truncate(columnVersionWriter.getVersion());
+                closeActivePartition(true);
+                row = regularRow;
+                rowAction = ROW_ACTION_OPEN_PARTITION;
+            } else {
+
+                // calculate new transient row count and max timestamp
+                final int prevIndex = index - 1;
+                final long prevTimestamp = txWriter.getPartitionTimestamp(prevIndex);
+                final long newTransientRowCount = txWriter.getPartitionSize(prevIndex);
+                try {
+                    setPathForPartition(path.trimTo(rootLen), partitionBy, prevTimestamp, false);
+                    TableUtils.txnPartitionConditionally(path, txWriter.getPartitionNameTxn(prevIndex));
+                    readPartitionMinMax(ff, prevTimestamp, path, metadata.getColumnName(metadata.getTimestampIndex()), newTransientRowCount);
+                } finally {
+                    path.trimTo(rootLen);
+                }
+
+                columnVersionWriter.removePartition(timestamp);
+                txWriter.beginPartitionSizeUpdate();
+                txWriter.removeAttachedPartitions(timestamp);
+                txWriter.finishPartitionSizeUpdate(txWriter.getMinTimestamp(), attachMaxTimestamp);
+                txWriter.bumpTruncateVersion();
+
+                columnVersionWriter.commit();
+                txWriter.setColumnVersion(columnVersionWriter.getVersion());
+                txWriter.commit(defaultCommitMode, denseSymbolMapWriters);
+
+                closeActivePartition(true);
+                row = regularRow;
+                openPartition(prevTimestamp);
+                setAppendPosition(newTransientRowCount, false);
             }
-
-            // calculate new transient row count and max timestamp
-            final int prevIndex = index - 1;
-            final long prevTimestamp = txWriter.getPartitionTimestamp(prevIndex);
-            final long newTransientRowCount = txWriter.getPartitionSize(prevIndex);
-            try {
-                setPathForPartition(path.trimTo(rootLen), partitionBy, prevTimestamp, false);
-                TableUtils.txnPartitionConditionally(path, txWriter.getPartitionNameTxn(prevIndex));
-                readPartitionMinMax(ff, prevTimestamp, path, metadata.getColumnName(metadata.getTimestampIndex()), newTransientRowCount);
-            }
-            finally {
-                path.trimTo(rootLen);
-            }
-
-            columnVersionWriter.removePartition(timestamp);
-            txWriter.beginPartitionSizeUpdate();
-            txWriter.removeAttachedPartitions(timestamp);
-            // max is updated upon finishing the transaction, the value was loaded by readPartitionMinMax
-            txWriter.finishPartitionSizeUpdate(txWriter.getMinTimestamp(), attachMaxTimestamp);
-            txWriter.bumpTruncateVersion();
-
-            columnVersionWriter.commit();
-            txWriter.setColumnVersion(columnVersionWriter.getVersion());
-            txWriter.commit(defaultCommitMode, denseSymbolMapWriters);
-
-            closeActivePartition(true);
-            row = regularRow;
-            openPartition(prevTimestamp);
-            setAppendPosition(newTransientRowCount, false);
         } else {
 
             // when we want to delete first partition we must find out minTimestamp from

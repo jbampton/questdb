@@ -32,8 +32,6 @@ import io.questdb.cairo.TableReader;
 import io.questdb.cairo.TableWriter;
 import io.questdb.cairo.security.AllowAllCairoSecurityContext;
 import io.questdb.cutlass.line.LineTcpSender;
-import io.questdb.log.Log;
-import io.questdb.log.LogFactory;
 import io.questdb.mp.SOCountDownLatch;
 import io.questdb.network.Net;
 import io.questdb.std.Os;
@@ -50,8 +48,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class AlterTableLineDropActivePartitionLineTest extends AbstractBootstrapTest {
-
-    private static final Log LOG = LogFactory.getLog(AlterTableLineDropActivePartitionLineTest.class);
 
     @BeforeClass
     public static void setUpStatic() throws Exception {
@@ -95,40 +91,14 @@ public class AlterTableLineDropActivePartitionLineTest extends AbstractBootstrap
             final SOCountDownLatch ilpAgentHalted = new SOCountDownLatch(1);
             final AtomicBoolean keepSending = new AtomicBoolean(true);
             final AtomicLong orderId = new AtomicLong(0L);
-            final String[] country = {
-                    "Ukraine",
-                    "Poland",
-                    "Lithuania",
-                    "USA",
-                    "Germany",
-                    "Czechia",
-                    "England",
-                    "Spain",
-                    "Singapore",
-                    "Taiwan",
-                    "Romania",
-            };
-            final String[] colour = {
-                    "Yellow",
-                    "Blue",
-                    "Green",
-                    "Red",
-                    "Gray",
-                    "Orange",
-                    "Black",
-                    "White",
-                    "Pink",
-                    "Brown",
-                    "Purple",
-            };
 
             final Thread ilpAgent = new Thread(() -> {
                 final Rnd rnd = new Rnd();
                 try (LineTcpSender sender = LineTcpSender.newSender(Net.parseIPv4("127.0.0.1"), ILP_PORT, 4 * 1024)) {
                     while (keepSending.get()) {
                         sender.metric(tableName)
-                                .tag("favourite_colour", colour[rnd.nextPositiveInt() % colour.length])
-                                .tag("country", country[rnd.nextPositiveInt() % country.length])
+                                .tag("favourite_colour", rndOf(rnd, colour))
+                                .tag("country", rndOf(rnd, country))
                                 .field("orderId", orderId.getAndIncrement())
                                 .field("quantity", rnd.nextPositiveInt())
                                 .field("ppu", rnd.nextFloat())
@@ -153,6 +123,7 @@ public class AlterTableLineDropActivePartitionLineTest extends AbstractBootstrap
                 Assert.assertTrue(beforeDropSize > 0L);
             }
 
+            // drop active partition
             try (
                     Connection connection = DriverManager.getConnection(PG_CONNECTION_URI, PG_CONNECTION_PROPERTIES);
                     PreparedStatement stmt = connection.prepareStatement("ALTER TABLE " + tableName + " DROP PARTITION WHERE timestamp > 0")
@@ -160,7 +131,7 @@ public class AlterTableLineDropActivePartitionLineTest extends AbstractBootstrap
                 stmt.execute();
             }
 
-            Os.sleep(100L); // allow a few millis more to the agent
+            Os.sleep(200L); // allow a few millis more to the agent
             keepSending.set(false);
             ilpAgentHalted.await();
 
@@ -184,4 +155,35 @@ public class AlterTableLineDropActivePartitionLineTest extends AbstractBootstrap
             }
         }
     }
+
+    private static String rndOf(Rnd rnd, String [] array) {
+        return array[rnd.nextPositiveInt() % array.length];
+    }
+
+    private static final String[] country = {
+            "Ukraine",
+            "Poland",
+            "Lithuania",
+            "USA",
+            "Germany",
+            "Czechia",
+            "England",
+            "Spain",
+            "Singapore",
+            "Taiwan",
+            "Romania",
+    };
+    private static final  String[] colour = {
+            "Yellow",
+            "Blue",
+            "Green",
+            "Red",
+            "Gray",
+            "Orange",
+            "Black",
+            "White",
+            "Pink",
+            "Brown",
+            "Purple",
+    };
 }

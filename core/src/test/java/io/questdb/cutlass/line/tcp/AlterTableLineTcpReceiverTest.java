@@ -24,9 +24,7 @@
 
 package io.questdb.cutlass.line.tcp;
 
-import io.questdb.cairo.TableReader;
-import io.questdb.cairo.TableReaderMetadata;
-import io.questdb.cairo.TableWriter;
+import io.questdb.cairo.*;
 import io.questdb.cairo.pool.PoolListener;
 import io.questdb.cairo.security.AllowAllCairoSecurityContext;
 import io.questdb.cairo.sql.OperationFuture;
@@ -125,31 +123,37 @@ public class AlterTableLineTcpReceiverTest extends AbstractLineTcpReceiverTest {
 
     @Test
     public void testAlterCommandDropLastPartition() throws Exception {
-        long day1 = IntervalUtils.parseFloorPartialTimestamp("2023-02-27") * 1000; // <-- last partition
         runInContext((server) -> {
+                    long day1 = IntervalUtils.parseFloorPartialTimestamp("2023-02-27") * 1000; // <-- last partition
+
+                    try (TableModel tm = new TableModel(configuration, "plug", PartitionBy.DAY)) {
+                        tm.col("room", ColumnType.SYMBOL);
+                        tm.col("watts", ColumnType.LONG);
+                        tm.timestamp();
+
+                        CairoTestUtils.create(tm);
+                    }
+                    try (TableWriter writer = engine.getWriter(AllowAllCairoSecurityContext.INSTANCE, "plug", "test")) {
+                        TableWriter.Row row = writer.newRow(day1 / 1000);
+                        row.putSym(0, "6A");
+                        row.putLong(1, 100L);
+                        row.append();
+                        writer.commit();
+                    }
+
                     Assert.assertNull(sendWithAlterStatement(
                             server,
-                            "plug,room=6A watts=\"1i\" " + day1 + "\n" +
-                                    "plug,room=6B watts=\"37i\" " + day1 + "\n" +
-                                    "plug,room=7G watts=\"21i\" " + day1 + "\n" +
-                                    "plug,room=1C watts=\"11i\" " + day1 + "\n",
-                            WAIT_ALTER_TABLE_RELEASE | WAIT_ENGINE_TABLE_RELEASE,
+                            "plug,room=6A watts=1i " + day1 + "\n" +
+                                    "plug,room=6B watts=37i " + day1 + "\n" +
+                                    "plug,room=7G watts=21i " + day1 + "\n" +
+                                    "plug,room=1C watts=11i " + day1 + "\n",
+                            WAIT_ALTER_TABLE_RELEASE,
                             "ALTER TABLE plug DROP PARTITION LIST '2023-02-27'"));
                     assertTable("room\twatts\ttimestamp\n");
 
-                    send(server, "plug,room=2A watts=\"125i\" " + day1 + "\n");
+                    send(server, "plug,room=6A watts=125i " + day1 + "\n");
                     assertTable("room\twatts\ttimestamp\n" +
-                            "2A\t125i\t2023-02-27T00:00:00.000000Z\n");
-
-                    Assert.assertNull(sendWithAlterStatement(
-                            server,
-                            "plug,room=6A watts=\"1i\" " + day1 + "\n" +
-                                    "plug,room=6B watts=\"37i\" " + day1 + "\n" +
-                                    "plug,room=7G watts=\"21i\" " + day1 + "\n" +
-                                    "plug,room=1C watts=\"11i\" " + day1 + "\n",
-                            WAIT_ALTER_TABLE_RELEASE | WAIT_ENGINE_TABLE_RELEASE,
-                            "ALTER TABLE plug DROP PARTITION LIST '2023-02-27'"));
-                    assertTable("room\twatts\ttimestamp\n");
+                            "6A\t125\t2023-02-27T00:00:00.000000Z\n");
                 },
                 true, 50L
         );
