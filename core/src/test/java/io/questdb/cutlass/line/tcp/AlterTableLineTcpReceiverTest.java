@@ -39,10 +39,7 @@ import io.questdb.log.LogFactory;
 import io.questdb.mp.SCSequence;
 import io.questdb.mp.SOCountDownLatch;
 import io.questdb.network.Net;
-import io.questdb.std.Chars;
-import io.questdb.std.MemoryTag;
-import io.questdb.std.Rnd;
-import io.questdb.std.Unsafe;
+import io.questdb.std.*;
 import io.questdb.std.datetime.microtime.Timestamps;
 import io.questdb.std.str.StringSink;
 import io.questdb.test.tools.TestUtils;
@@ -53,6 +50,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.LinkedList;
 import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class AlterTableLineTcpReceiverTest extends AbstractLineTcpReceiverTest {
     private final static Log LOG = LogFactory.getLog(AlterTableLineTcpReceiverTest.class);
@@ -120,6 +120,109 @@ public class AlterTableLineTcpReceiverTest extends AbstractLineTcpReceiverTest {
                     assertTable(expected);
                 },
                 true, 250
+        );
+    }
+
+    @Test
+    public void testAlterCommandDropLastPartition() throws Exception {
+        long day1 = IntervalUtils.parseFloorPartialTimestamp("2023-02-27") * 1000; // <-- last partition
+        runInContext((server) -> {
+                    Assert.assertNull(sendWithAlterStatement(
+                            server,
+                            "plug,room=6A watts=\"1i\" " + day1 + "\n" +
+                                    "plug,room=6B watts=\"37i\" " + day1 + "\n" +
+                                    "plug,room=7G watts=\"21i\" " + day1 + "\n" +
+                                    "plug,room=1C watts=\"11i\" " + day1 + "\n",
+                            WAIT_ALTER_TABLE_RELEASE | WAIT_ENGINE_TABLE_RELEASE,
+                            "ALTER TABLE plug DROP PARTITION LIST '2023-02-27'"));
+                    assertTable("room\twatts\ttimestamp\n");
+
+                    send(server, "plug,room=2A watts=\"125i\" " + day1 + "\n");
+                    assertTable("room\twatts\ttimestamp\n" +
+                            "2A\t125i\t2023-02-27T00:00:00.000000Z\n");
+
+                    Assert.assertNull(sendWithAlterStatement(
+                            server,
+                            "plug,room=6A watts=\"1i\" " + day1 + "\n" +
+                                    "plug,room=6B watts=\"37i\" " + day1 + "\n" +
+                                    "plug,room=7G watts=\"21i\" " + day1 + "\n" +
+                                    "plug,room=1C watts=\"11i\" " + day1 + "\n",
+                            WAIT_ALTER_TABLE_RELEASE | WAIT_ENGINE_TABLE_RELEASE,
+                            "ALTER TABLE plug DROP PARTITION LIST '2023-02-27'"));
+                    assertTable("room\twatts\ttimestamp\n");
+                },
+                true, 50L
+        );
+    }
+
+    @Test
+    public void testAlterCommandDropAllPartitions() throws Exception {
+        long day1 = IntervalUtils.parseFloorPartialTimestamp("2023-02-27") * 1000;
+        long day2 = IntervalUtils.parseFloorPartialTimestamp("2023-02-28") * 1000;
+        runInContext((server) -> {
+
+                    final AtomicLong ilpProducerWatts = new AtomicLong(0L);
+                    final AtomicBoolean keepSending = new AtomicBoolean(true);
+                    final SOCountDownLatch ilpProducerHalted = new SOCountDownLatch(1);
+
+                    final Thread ilpProducer = new Thread(() -> {
+                        String lineTpt = "plug,room=6A watts=\"%di\" %d%n";
+                        try {
+                            while (keepSending.get()) {
+                                try {
+                                    long watts = ilpProducerWatts.getAndIncrement();
+                                    long day = (watts + 1) % 4 == 0 ? day1 : day2;
+                                    String lineData = String.format(lineTpt, watts, day);
+                                    send(server, lineData);
+                                    LOG.info().$("sent: ").$(lineData).$();
+                                } catch (Exception e) {
+                                    Assert.fail("could not send");
+                                }
+                            }
+                        } finally {
+                            ilpProducerHalted.countDown();
+                            LOG.info().$("sender is finished").$();
+                        }
+                    }, "ilp-producer");
+                    ilpProducer.start();
+
+
+                    final AtomicReference<SqlException> problem = new AtomicReference<>();
+
+                    final Thread partitionDropper = new Thread(() -> {
+                        while (ilpProducerWatts.get() < 20) {
+                            Os.pause();
+                        }
+                        LOG.info().$("ABOUT TO DROP PARTITIONS").$();
+                        try (SqlCompiler compiler = new SqlCompiler(engine);
+                             SqlExecutionContext sqlExecutionContext = new SqlExecutionContextImpl(engine, 1)
+                                     .with(
+                                             AllowAllCairoSecurityContext.INSTANCE,
+                                             new BindVariableServiceImpl(configuration),
+                                             null,
+                                             -1,
+                                             null
+                                     )
+                        ) {
+                            CompiledQuery cc = compiler.compile("ALTER TABLE plug DROP PARTITION WHERE timestamp > 0", sqlExecutionContext);
+                            try (OperationFuture result = cc.execute(scSequence)) {
+                                result.await();
+                                Assert.assertEquals(OperationFuture.QUERY_COMPLETE, result.getStatus());
+                            }
+                        } catch (SqlException e) {
+                            problem.set(e);
+                        } finally {
+                            keepSending.set(false);
+                        }
+
+                    }, "partition-dropper");
+                    partitionDropper.start();
+
+                    ilpProducerHalted.await();
+                    Assert.assertNull(problem.get());
+                    assertTable("room\twatts\ttimestamp\n"); // funny, it reads ROOM TWATTS with 2Ts
+                },
+                true, 50L
         );
     }
 
@@ -395,15 +498,15 @@ public class AlterTableLineTcpReceiverTest extends AbstractLineTcpReceiverTest {
             Assert.assertNull(exception3);
 
             assertTable("label\troom\twatts\ttimestamp\n" +
-                            "Line\t6C\t333\t1970-01-01T00:25:31.817902Z\n" +
-                            "Line\t6C\t333\t1970-01-01T00:25:31.817902Z\n" +
-                            "Line\t6C\t333\t1970-01-01T00:25:31.817902Z\n" +
-                            "Power\t6B\t22\t1970-01-01T00:27:11.817902Z\n" +
-                            "Power\t6B\t22\t1970-01-01T00:27:11.817902Z\n" +
-                            "Power\t6B\t22\t1970-01-01T00:27:11.817902Z\n" +
-                            "Power\t6A\t1\t1970-01-01T00:43:51.819999Z\n" +
-                            "Power\t6A\t1\t1970-01-01T00:43:51.819999Z\n" +
-                            "Power\t6A\t1\t1970-01-01T00:43:51.819999Z\n"
+                    "Line\t6C\t333\t1970-01-01T00:25:31.817902Z\n" +
+                    "Line\t6C\t333\t1970-01-01T00:25:31.817902Z\n" +
+                    "Line\t6C\t333\t1970-01-01T00:25:31.817902Z\n" +
+                    "Power\t6B\t22\t1970-01-01T00:27:11.817902Z\n" +
+                    "Power\t6B\t22\t1970-01-01T00:27:11.817902Z\n" +
+                    "Power\t6B\t22\t1970-01-01T00:27:11.817902Z\n" +
+                    "Power\t6A\t1\t1970-01-01T00:43:51.819999Z\n" +
+                    "Power\t6A\t1\t1970-01-01T00:43:51.819999Z\n" +
+                    "Power\t6A\t1\t1970-01-01T00:43:51.819999Z\n"
             );
 
             engine.releaseAllReaders();
