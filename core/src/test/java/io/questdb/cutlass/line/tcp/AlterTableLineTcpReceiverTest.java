@@ -220,7 +220,7 @@ public class AlterTableLineTcpReceiverTest extends AbstractLineTcpReceiverTest {
 
                     ilpProducerHalted.await();
                     Assert.assertNull(problem.get());
-                    assertTable("room\twatts\ttimestamp\n"); // funny, it reads ROOM TWATTS with 2Ts
+                    assertTable("room\twatts\ttimestamp\n");
                 },
                 true, 50L
         );
